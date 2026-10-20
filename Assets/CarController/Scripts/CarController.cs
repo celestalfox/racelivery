@@ -53,6 +53,19 @@ namespace CarContollingScripts
         public float driftGripTransition = 4f;
         public float driftSteeringAssist = 0.5f;
 
+        [Header("Auto Drift")]
+        public bool autoAccelerate = true;
+        public bool autoDrift = true;
+        [Range(0.1f, 1f)] public float autoDriftEnterSteer = 0.65f; // |steer| needed to start drifting
+        [Range(0.05f, 1f)] public float autoDriftExitSteer = 0.35f; // |steer| below this ends the drift
+        public float autoDriftMinSpeed = 30f;                       // km/h to start
+        public float autoDriftExitSpeed = 18f;                      // km/h to stop
+        public float maxDriftAngle = 50f;                           // degrees, grip returns above this
+        public float counterSteerAssist = 0.6f;                     // automatic counter-steer
+        public float alignStrength = 4f;                            // self-straightening force
+
+        private bool autoDrifting;
+        private float slipAngle; // degrees, + = velocity points to the right of the car
         [Header("Stability")]
         public Vector3 _centerOfMass = new Vector3(0f, -0.4f, 0f);
         public float downforce = 30f;
@@ -118,11 +131,32 @@ namespace CarContollingScripts
         {
             if (carRb == null) return;
 
+            UpdateSlipAndDriftState();
             Move();
             Steer();
             Brake();
             ApplyStability();
             UpdateDriftGrip();
+        }
+
+        void UpdateSlipAndDriftState()
+        {
+            Vector3 vel = carRb.linearVelocity; vel.y = 0f;
+            float speedKmh = vel.magnitude * 3.6f;
+            float fwd = Vector3.Dot(vel, transform.forward);
+
+            if (speedKmh > 5f && fwd > 0f)
+                slipAngle = Vector3.SignedAngle(
+                    Vector3.ProjectOnPlane(transform.forward, Vector3.up),
+                    vel, Vector3.up);
+            else
+                slipAngle = 0f;
+
+            float s = Mathf.Abs(steerInput);
+            if (!autoDrifting && autoDrift && s >= autoDriftEnterSteer && speedKmh >= autoDriftMinSpeed)
+                autoDrifting = true;
+            else if (autoDrifting && (s < autoDriftExitSteer || speedKmh < autoDriftExitSpeed))
+                autoDrifting = false;
         }
 
         public void MoveInput(float input)
@@ -230,7 +264,6 @@ namespace CarContollingScripts
 
         void Steer()
         {
-            print(steerInput);
             float speed = carRb.linearVelocity.magnitude * 3.6f;
 
             // Reduce steering sensitivity at higher speeds.
@@ -242,6 +275,12 @@ namespace CarContollingScripts
             float targetSteer =
                 steerInput * turnSensitivity *
                 maxSteerAngle * speedFactor;
+
+            
+
+            // Counter-steer toward the direction of travel while sliding
+            targetSteer += slipAngle * counterSteerAssist * driftAmount;
+            targetSteer = Mathf.Clamp(targetSteer, -maxSteerAngle, maxSteerAngle);
 
             currentSteer = Mathf.Lerp(
                 currentSteer,
@@ -308,41 +347,35 @@ namespace CarContollingScripts
 
         void UpdateDriftGrip()
         {
-            float speed = carRb.linearVelocity.magnitude * 3.6f;
-
             float targetDrift = 0f;
 
-            if (enableDrifting && isBraking && speed >= driftStartSpeed)
+            if (enableDrifting && (autoDrifting || (isBraking && carRb.linearVelocity.magnitude * 3.6f >= driftStartSpeed)))
+                
             {
                 targetDrift = 1f;
+                print("this happens");
+
+                // Anti-spin: grip comes back as the slide angle approaches the limit
+                float angleFactor = 1f - Mathf.InverseLerp(maxDriftAngle * 0.8f, maxDriftAngle * 1.2f, Mathf.Abs(slipAngle));
+                targetDrift *= angleFactor;
             }
 
-            driftAmount = Mathf.MoveTowards(
-                driftAmount,
-                targetDrift,
-                driftGripTransition * Time.fixedDeltaTime);
+            driftAmount = Mathf.MoveTowards(driftAmount, targetDrift, driftGripTransition * Time.fixedDeltaTime);
 
             for (int i = 0; i < wheels.Count; i++)
             {
                 Wheel wheel = wheels[i];
-
                 if (wheel.wheelCollider == null) continue;
 
-                WheelFrictionCurve friction =
-                    originalSidewaysFriction[i];
-
+                WheelFrictionCurve friction = originalSidewaysFriction[i];
                 if (wheel.axel == Axel.Rear && enableDrifting)
                 {
-                    friction.stiffness = Mathf.Lerp(
-                        originalSidewaysFriction[i].stiffness,
-                        rearDriftGrip,
-                        driftAmount);
+                    friction.stiffness = originalSidewaysFriction[i].stiffness *
+                                         Mathf.Lerp(1f, rearDriftGrip, driftAmount);
                 }
-
                 wheel.wheelCollider.sidewaysFriction = friction;
             }
         }
-
         void ApplyStability()
         {
             float speed = carRb.linearVelocity.magnitude;
@@ -380,6 +413,11 @@ namespace CarContollingScripts
             carRb.AddTorque(
                 -transform.up * localAngularVelocity.y * yawDamping,
                 ForceMode.Acceleration);
+
+            float alignScale = Mathf.Lerp(1f, 0.25f, driftAmount * Mathf.Abs(steerInput));
+            float speedScale = Mathf.InverseLerp(5f, 30f, speed);
+            carRb.AddTorque(Vector3.up * slipAngle * Mathf.Deg2Rad * alignStrength * alignScale * speedScale,
+                            ForceMode.Acceleration);
         }
 
         void AnimateWheels()
@@ -409,12 +447,9 @@ namespace CarContollingScripts
 
                 float speed = carRb.linearVelocity.magnitude * 3.6f;
 
-                bool shouldEmit =
-                    isBraking &&
-                    wheel.axel == Axel.Rear &&
-                    wheel.wheelCollider != null &&
-                    wheel.wheelCollider.isGrounded &&
-                    speed >= driftStartSpeed;
+               
+                bool shouldEmit = driftAmount > 0.3f && wheel.axel == Axel.Rear &&
+                  wheel.wheelCollider != null && wheel.wheelCollider.isGrounded;
 
                 wheel.trailRenderer.emitting = shouldEmit;
             }
