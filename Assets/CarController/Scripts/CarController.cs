@@ -1,231 +1,424 @@
-using UnityEngine;
 using System;
 using System.Collections.Generic;
+using UnityEngine;
 
-   namespace CarContollingScripts
-{ 
-    public class CarController : MonoBehaviour
+namespace CarContollingScripts
 {
-    public enum ControlMode
+    public class CarController : MonoBehaviour
     {
-        Keyboard,
-        Buttons
-    };
+        public enum ControlMode
+        {
+            Keyboard,
+            Buttons
+        }
 
-    public enum Axel
-    {
-        Front,
-        Rear
-    }
+        public enum Axel
+        {
+            Front,
+            Rear
+        }
 
-    [Serializable]
-    public struct Wheel
-    {
-        public GameObject wheelModel;
-        public WheelCollider wheelCollider;
-        public Axel axel;
-        public TrailRenderer trailRenderer; // Added TrailRenderer reference
-    }
+        [Serializable]
+        public struct Wheel
+        {
+            public GameObject wheelModel;
+            public WheelCollider wheelCollider;
+            public Axel axel;
+            public TrailRenderer trailRenderer;
+        }
 
-    public ControlMode control;
+        [Header("Control")]
+        public ControlMode control = ControlMode.Keyboard;
 
-    public float maxAcceleration = 30.0f;
-    public float brakeAcceleration = 50.0f;
-    public float maxSpeed = 40.0f; // Maximum speed in km/h
-    public float lowestSpeed = 10.0f; // Maximum reverse speed in km/h
+        [Header("Engine")]
+        public float maxAcceleration = 30f;
+        public float maxSpeed = 40f;
+        public float reverseSpeed = 10f;
+        public float minimumDrivingSpeed = 10f;
+        public bool maintainMinimumSpeed = false;
+        public float brakeAcceleration = 50f;
 
-    public float turnSensitivity = 1.0f;
-    public float maxSteerAngle = 30.0f;
-        public float backwheelturn = 2; //backwheels turn reduction
+        [Header("Steering")]
+        public float turnSensitivity = 1f;
+        public float maxSteerAngle = 30f;
+        public float backwheelturn = 2f;
+        public float steeringSmoothness = 5f;
+        public float highSpeedSteeringReduction = 0.45f;
 
-    public Vector3 _centerOfMass;
+        [Header("Drifting")]
+        public bool enableDrifting = true;
+        public float driftStartSpeed = 15f;
+        [Range(0.1f, 1f)]
+        public float rearDriftGrip = 0.65f;
+        public float driftGripTransition = 4f;
+        public float driftSteeringAssist = 0.5f;
 
-    public List<Wheel> wheels;
+        [Header("Stability")]
+        public Vector3 _centerOfMass = new Vector3(0f, -0.4f, 0f);
+        public float downforce = 30f;
+        public float lateralGrip = 1.5f;
+        public float stabilityStrength = 2f;
+
+        [Header("Wheel Setup")]
+        public List<Wheel> wheels = new List<Wheel>();
         public Transform body;
 
-    float moveInput;
-    float steerInput;
-    bool isBraking;
-    bool isReversing;
+        private Rigidbody carRb;
 
-    private Rigidbody carRb;
+        private float moveInput;
+        private float steerInput;
+        private float currentSteer;
+        private bool isBraking;
+        private float mobilesteer;
 
-    void Start()
-    {
-        carRb = GetComponent<Rigidbody>();
-        carRb.centerOfMass = _centerOfMass;
+        private float driftAmount;
+        private WheelFrictionCurve[] originalSidewaysFriction;
 
-        // Initialize Trail Renderer if it exists in each wheel
-        foreach (var wheel in wheels)
+        void Start()
         {
-            if (wheel.trailRenderer != null)
+            carRb = GetComponent<Rigidbody>();
+
+            if (carRb == null)
             {
-                wheel.trailRenderer.emitting = false; // Start with emission off
-                
-                // Mobile-specific settings
-                #if UNITY_ANDROID || UNITY_IOS
-                    wheel.trailRenderer.time = 5.0f;
-                    wheel.trailRenderer.startWidth = 0.1f;
-                    wheel.trailRenderer.endWidth = 0.05f;
-                    wheel.trailRenderer.minVertexDistance = 0.1f;
-                #endif
+                Debug.LogError("CarController requires a Rigidbody.", this);
+                enabled = false;
+                return;
             }
-        }
-    }
 
-    void Update()
-    {
-        GetInputs();
-        AnimateWheels();
-        WheelEffects();
-        
-           
-        }
+            carRb.centerOfMass = _centerOfMass;
 
-    void LateUpdate()
-    {
-        Move();
-        Steer();
-        Brake();
-    }
+            originalSidewaysFriction =
+                new WheelFrictionCurve[wheels.Count];
 
-    public void MoveInput(float input)
-    {
-        moveInput = input;
-    }
-
-    public void SteerInput(float input)
-    {
-        steerInput = input;
-    }
-
-    public void BrakeInput(bool input)
-    {
-        isBraking = input;
-    }
-
-    void GetInputs()
-    {
-        if (control == ControlMode.Keyboard)
-        {
-            moveInput = Input.GetAxis("Vertical");
-            steerInput = Input.GetAxis("Horizontal");
-            isBraking = Input.GetKey(KeyCode.Space);
-        }
-        else if (control == ControlMode.Buttons)
-        {
-            // Here you would set moveInput, steerInput, and isBraking based on UI button presses
-            // Example: moveInput = GetMoveInputFromButtons();
-            // Example: steerInput = GetSteerInputFromButtons();
-            // Example: isBraking = GetBrakeInputFromButtons();
-        }
-    }
-
-    void Move()
-    {
-        // Calculate the current speed of the car in km/h
-        float speed = carRb.linearVelocity.magnitude * 3.6f; // Convert m/s to km/h
-            print(speed);
-
-        for (int i = 0; i < wheels.Count; i++)
-        {
-            // Check if the car is moving forward or in reverse
-            
-            
-            {
-                if (speed < maxSpeed)
-                {
-                    wheels[i].wheelCollider.motorTorque = 1 * 600 * maxAcceleration * Time.deltaTime;
-                }
-                else 
-                {
-                    wheels[i].wheelCollider.motorTorque = lowestSpeed;
-                }
-            }
-        }
-    }
-
-    void Steer()
-    {
-        foreach (var wheel in wheels)
-        {
-            if (wheel.axel == Axel.Front)
-            {
-                var _steerAngle = steerInput * turnSensitivity * maxSteerAngle;
-                wheel.wheelCollider.steerAngle = Mathf.Lerp(wheel.wheelCollider.steerAngle, _steerAngle, 0.6f);
-                //transform.rotation = Quaternion.Euler(0, _steerAngle   , 0);
-              
-                }
-            else
-            {
-                var _steerAngle = -(steerInput * turnSensitivity * maxSteerAngle)/backwheelturn;
-                wheel.wheelCollider.steerAngle = Mathf.Lerp(wheel.wheelCollider.steerAngle, _steerAngle, 0.6f);
-                    //transform.rotation = Quaternion.Euler(0, _steerAngle   , 0);
-                  
-                }
-                
-        }
-    }
-
-    void Brake()
-    {
-        if (isBraking)
-        {
             for (int i = 0; i < wheels.Count; i++)
             {
-                wheels[i].wheelCollider.brakeTorque = 300 * brakeAcceleration * Time.deltaTime;
-            }
+                Wheel wheel = wheels[i];
 
-            // If the car is almost stopped, allow reversing
-            if (carRb.linearVelocity.magnitude < 0.1f)
-            {
-                isReversing = true;
-            }
-        }
-        else
-        {
-            //for (int i = 0; i < wheels.Count; i++)
-            {
-              //  wheels[i].wheelCollider.brakeTorque = 0;
-            }
-
-            // If the car is not braking, disable reversing
-            if (carRb.linearVelocity.magnitude < 0.1f)
-            {
-                isReversing = false;
-            }
-        }
-    }
-
-    void AnimateWheels()
-    {
-        foreach (var wheel in wheels)
-        {
-            Quaternion rot;
-            Vector3 pos;
-            wheel.wheelCollider.GetWorldPose(out pos, out rot);
-            wheel.wheelModel.transform.position = pos;
-            wheel.wheelModel.transform.rotation = rot;
-        }
-    }
-
-    void WheelEffects()
-    {
-        foreach (var wheel in wheels)
-        {
-            if (wheel.trailRenderer != null)
-            {
-                if (isBraking && wheel.axel == Axel.Rear && wheel.wheelCollider.isGrounded && carRb.linearVelocity.magnitude >= 10.0f)
+                if (wheel.wheelCollider != null)
                 {
-                    wheel.trailRenderer.emitting = true;
+                    originalSidewaysFriction[i] =
+                        wheel.wheelCollider.sidewaysFriction;
                 }
-                else
+
+                if (wheel.trailRenderer != null)
                 {
                     wheel.trailRenderer.emitting = false;
                 }
             }
         }
+
+        void Update()
+        {
+            GetInputs();
+            AnimateWheels();
+            WheelEffects();
+        }
+
+        void FixedUpdate()
+        {
+            if (carRb == null) return;
+
+            Move();
+            Steer();
+            Brake();
+            ApplyStability();
+            UpdateDriftGrip();
+        }
+
+        public void MoveInput(float input)
+        {
+            moveInput = Mathf.Clamp(input, -1f, 1f);
+        }
+
+        public void SteerInput(float input)
+        {
+            steerInput = Mathf.Clamp(input, -1f, 1f);
+        }
+
+        public void BrakeInput(bool input)
+        {
+            isBraking = input;
+        }
+
+        void GetInputs()
+        {
+            if (control == ControlMode.Keyboard)
+            {
+
+                steerInput = Input.GetAxis("Horizontal");
+
+
+            }
+            // Buttons mode uses the public input methods above.
+           
+        }
+
+      
+       
+
+
+        void Move()
+        {
+            float forwardSpeed =
+                Vector3.Dot(carRb.linearVelocity, transform.forward) * 3.6f;
+
+            float speed = carRb.linearVelocity.magnitude * 3.6f;
+
+            bool reversing = 1 < -0.05f;
+
+            for (int i = 0; i < wheels.Count; i++)
+            {
+                Wheel wheel = wheels[i];
+
+                if (wheel.wheelCollider == null) continue;
+
+                WheelCollider collider = wheel.wheelCollider;
+
+                collider.motorTorque = 0f;
+
+                // Apply drive torque only when the car can accelerate
+                // in the requested direction.
+                if (isBraking) continue;
+
+                if (reversing)
+                {
+                    if (forwardSpeed > 1f) continue;
+
+                    if (forwardSpeed > -reverseSpeed)
+                    {
+                        collider.motorTorque =
+                            1 * maxAcceleration * 100f;
+                    }
+                }
+                else if (1 > 0.05f)
+                {
+                    if (forwardSpeed < maxSpeed)
+                    {
+                        float acceleration = maxAcceleration;
+
+                        // Optional minimum driving speed while throttle
+                        // is held. This is a soft acceleration assist.
+                        if (maintainMinimumSpeed &&
+                            forwardSpeed >= 0f &&
+                            forwardSpeed < minimumDrivingSpeed)
+                        {
+                            acceleration *= 1.5f;
+                        }
+
+                        collider.motorTorque =
+                            1 * acceleration * 100f;
+                    }
+                }
+            }
+
+            // Smoothly prevent excessive forward and reverse speed.
+            if (forwardSpeed > maxSpeed)
+            {
+                carRb.AddForce(
+                    -transform.forward *
+                    ((forwardSpeed - maxSpeed) * 0.5f),
+                    ForceMode.Acceleration);
+            }
+            else if (forwardSpeed < -reverseSpeed)
+            {
+                carRb.AddForce(
+                    transform.forward *
+                    ((-reverseSpeed - forwardSpeed) * 0.5f),
+                    ForceMode.Acceleration);
+            }
+        }
+
+        void Steer()
+        {
+            print(steerInput);
+            float speed = carRb.linearVelocity.magnitude * 3.6f;
+
+            // Reduce steering sensitivity at higher speeds.
+            float speedFactor = Mathf.Lerp(
+                1f,
+                highSpeedSteeringReduction,
+                Mathf.InverseLerp(10f, maxSpeed, speed));
+
+            float targetSteer =
+                steerInput * turnSensitivity *
+                maxSteerAngle * speedFactor;
+
+            currentSteer = Mathf.Lerp(
+                currentSteer,
+                targetSteer,
+                1f - Mathf.Exp(-steeringSmoothness *
+                               Time.fixedDeltaTime));
+
+            for (int i = 0; i < wheels.Count; i++)
+            {
+                Wheel wheel = wheels[i];
+
+                if (wheel.wheelCollider == null) continue;
+
+                float angle;
+
+                if (wheel.axel == Axel.Front)
+                {
+                    angle = currentSteer;
+                }
+                else
+                {
+                    // Counter-steer rear wheels gently for stability.
+                    angle = -currentSteer /
+                            Mathf.Max(1f, backwheelturn);
+
+                    // Reduce rear steering when moving quickly.
+                    angle *= 1f - driftAmount * driftSteeringAssist;
+                }
+
+                wheel.wheelCollider.steerAngle = angle;
+            }
+        }
+
+        void Brake()
+        {
+            float speed = carRb.linearVelocity.magnitude * 3.6f;
+
+            for (int i = 0; i < wheels.Count; i++)
+            {
+                Wheel wheel = wheels[i];
+
+                if (wheel.wheelCollider == null) continue;
+
+                // Always reset brake torque when not braking.
+                if (!isBraking)
+                {
+                    wheel.wheelCollider.brakeTorque = 0f;
+                    continue;
+                }
+
+                float brakePower = brakeAcceleration * 100f;
+
+                // Rear braking helps initiate a drift.
+                if (enableDrifting &&
+                    speed >= driftStartSpeed &&
+                    wheel.axel == Axel.Rear)
+                {
+                    brakePower *= 1.25f;
+                }
+
+                wheel.wheelCollider.brakeTorque = brakePower;
+            }
+        }
+
+        void UpdateDriftGrip()
+        {
+            float speed = carRb.linearVelocity.magnitude * 3.6f;
+
+            float targetDrift = 0f;
+
+            if (enableDrifting && isBraking && speed >= driftStartSpeed)
+            {
+                targetDrift = 1f;
+            }
+
+            driftAmount = Mathf.MoveTowards(
+                driftAmount,
+                targetDrift,
+                driftGripTransition * Time.fixedDeltaTime);
+
+            for (int i = 0; i < wheels.Count; i++)
+            {
+                Wheel wheel = wheels[i];
+
+                if (wheel.wheelCollider == null) continue;
+
+                WheelFrictionCurve friction =
+                    originalSidewaysFriction[i];
+
+                if (wheel.axel == Axel.Rear && enableDrifting)
+                {
+                    friction.stiffness = Mathf.Lerp(
+                        originalSidewaysFriction[i].stiffness,
+                        rearDriftGrip,
+                        driftAmount);
+                }
+
+                wheel.wheelCollider.sidewaysFriction = friction;
+            }
+        }
+
+        void ApplyStability()
+        {
+            float speed = carRb.linearVelocity.magnitude;
+
+            // Downforce keeps the car planted at speed.
+            carRb.AddForce(
+                -transform.up * downforce * speed,
+                ForceMode.Force);
+
+            // Dampen unwanted sideways motion without removing
+            // all lateral velocity needed for drifting.
+            Vector3 localVelocity =
+                transform.InverseTransformDirection(carRb.linearVelocity);
+
+            float grip = lateralGrip;
+
+            if (enableDrifting)
+            {
+                grip *= Mathf.Lerp(1f, 0.35f, driftAmount);
+            }
+
+            Vector3 correction =
+                -transform.right * localVelocity.x * grip;
+
+            carRb.AddForce(correction, ForceMode.Acceleration);
+
+            // Mildly resist unwanted yaw spin at higher speeds.
+            Vector3 localAngularVelocity =
+                transform.InverseTransformDirection(carRb.angularVelocity);
+
+            float yawDamping = stabilityStrength *
+                               Mathf.Lerp(0.5f, 1f,
+                                   Mathf.InverseLerp(5f, maxSpeed, speed));
+
+            carRb.AddTorque(
+                -transform.up * localAngularVelocity.y * yawDamping,
+                ForceMode.Acceleration);
+        }
+
+        void AnimateWheels()
+        {
+            foreach (Wheel wheel in wheels)
+            {
+                if (wheel.axel == Axel.Front)
+                {
+                    if (wheel.wheelCollider == null ||
+                    wheel.wheelModel == null) continue;
+
+                    wheel.wheelCollider.GetWorldPose(
+                        out Vector3 position,
+                        out Quaternion rotation);
+
+                    wheel.wheelModel.transform.SetPositionAndRotation(
+                        position, rotation);
+                }
+            }
+        }
+
+        void WheelEffects()
+        {
+            foreach (Wheel wheel in wheels)
+            {
+                if (wheel.trailRenderer == null) continue;
+
+                float speed = carRb.linearVelocity.magnitude * 3.6f;
+
+                bool shouldEmit =
+                    isBraking &&
+                    wheel.axel == Axel.Rear &&
+                    wheel.wheelCollider != null &&
+                    wheel.wheelCollider.isGrounded &&
+                    speed >= driftStartSpeed;
+
+                wheel.trailRenderer.emitting = shouldEmit;
+            }
+        }
     }
 }
 
-}
