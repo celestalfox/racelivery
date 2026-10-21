@@ -353,7 +353,7 @@ namespace CarContollingScripts
                 
             {
                 targetDrift = 1f;
-                print("this happens");
+                
 
                 // Anti-spin: grip comes back as the slide angle approaches the limit
                 float angleFactor = 1f - Mathf.InverseLerp(maxDriftAngle * 0.8f, maxDriftAngle * 1.2f, Mathf.Abs(slipAngle));

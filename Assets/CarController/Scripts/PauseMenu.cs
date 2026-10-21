@@ -36,7 +36,7 @@ namespace GameMenu
 
         public void Restart()
         {
-            SceneManager.LoadScene("Game");
+            SceneManager.LoadScene("GameScene");
             Time.timeScale = 1;
         }
 
