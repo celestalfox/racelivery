@@ -228,6 +228,7 @@ public static class GameFlow
     {
         SelectedStage = (SelectedStage + d + Stages.Length) % Stages.Length;
         Debug.Log($"[GameFlow] Selected stage: {Stages[SelectedStage]}");
+        SceneManager.LoadScene(SelectedStage);
     }
 
     static void ToggleMute()
