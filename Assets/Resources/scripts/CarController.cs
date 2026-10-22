@@ -204,11 +204,11 @@ namespace CarContollingScripts
 
             }
             // Buttons mode uses the public input methods above.
-           
+
         }
 
-      
-       
+
+
 
 
         void Move()
@@ -296,7 +296,7 @@ namespace CarContollingScripts
                 steerInput * turnSensitivity *
                 maxSteerAngle * speedFactor;
 
-            
+
 
             // Counter-steer toward the direction of travel while sliding
             targetSteer += slipAngle * counterSteerAssist * driftAmount;
@@ -328,7 +328,7 @@ namespace CarContollingScripts
 
                     // Reduce rear steering when moving quickly.
                     angle *= 1f - driftAmount * driftSteeringAssist;
-                   
+
                 }
 
                 wheel.wheelCollider.steerAngle = angle;
@@ -394,10 +394,10 @@ namespace CarContollingScripts
             float targetDrift = 0f;
 
             if (enableDrifting && (autoDrifting || (isBraking && carRb.linearVelocity.magnitude * 3.6f >= driftStartSpeed)))
-                
+
             {
                 targetDrift = 1f;
-                
+
 
                 // Anti-spin: grip comes back as the slide angle approaches the limit
                 float angleFactor = 1f - Mathf.InverseLerp(maxDriftAngle * 0.8f, maxDriftAngle * 1.2f, Mathf.Abs(slipAngle));
@@ -483,21 +483,57 @@ namespace CarContollingScripts
             }
         }
 
+        [Header("Skid Marks")]
+        public float skidStartSlip = 0.6f;    // slip needed to START leaving a mark
+        public float skidStopSlip = 0.3f;     // slip must fall below this to STOP
+        public float skidHoldTime = 0.25f;    // seconds marks keep going after slip drops
+        public float skidMinSpeed = 8f;       // km/h
+        public bool skidFrontWheelsToo = false;
+        public bool debugSkidSlip = false;
+
+        float[] skidTimer;
+        bool[] skidOn;
+
         void WheelEffects()
         {
-            foreach (Wheel wheel in wheels)
+            if (skidTimer == null || skidTimer.Length != wheels.Count)
             {
-                if (wheel.trailRenderer == null) continue;
+                skidTimer = new float[wheels.Count];
+                skidOn = new bool[wheels.Count];
+            }
 
-                float speed = carRb.linearVelocity.magnitude * 3.6f;
+            float speed = carRb.linearVelocity.magnitude * 3.6f;
 
-               
-                bool shouldEmit = driftAmount > 0.3f && wheel.axel == Axel.Rear &&
-                  wheel.wheelCollider != null && wheel.wheelCollider.isGrounded;
+            for (int i = 0; i < wheels.Count; i++)
+            {
+                Wheel wheel = wheels[i];
+                if (wheel.trailRenderer == null || wheel.wheelCollider == null) continue;
 
-                wheel.trailRenderer.emitting = shouldEmit;
+                bool allowed = skidFrontWheelsToo || wheel.axel == Axel.Rear;
+                float slip = 0f;
+                bool grounded = wheel.wheelCollider.GetGroundHit(out WheelHit hit);
+
+                if (grounded && allowed && speed > skidMinSpeed)
+                    slip = Mathf.Max(Mathf.Abs(hit.sidewaysSlip), Mathf.Abs(hit.forwardSlip));
+
+                if (debugSkidSlip && allowed && grounded)
+                    Debug.Log($"{wheel.wheelCollider.name} slip={slip:F2}");
+
+                // Hysteresis: needs a higher value to start than to keep going
+                if (slip > skidStartSlip || (skidOn[i] && slip > skidStopSlip))
+                {
+                    skidOn[i] = true;
+                    skidTimer[i] = skidHoldTime;
+                }
+                else
+                {
+                    skidTimer[i] -= Time.deltaTime;
+                    if (skidTimer[i] <= 0f) skidOn[i] = false;
+                }
+
+                wheel.trailRenderer.emitting = skidOn[i] && grounded;
             }
         }
     }
-}
-
+    }
+   
