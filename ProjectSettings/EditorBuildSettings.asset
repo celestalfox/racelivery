@@ -5,14 +5,11 @@ EditorBuildSettings:
   m_ObjectHideFlags: 0
   serializedVersion: 2
   m_Scenes:
-  - enabled: 0
-    path: Assets/CarController/Scenes/MainMenu.unity
-    guid: 3b59afbd91ed8ec4a96f7ad82d1c22ef
-  - enabled: 0
-    path: Assets/Scenes/SampleScene.unity
-    guid: 99c9720ab356a0642a771bea13969a05
   - enabled: 1
-    path: Assets/Scenes/SampleScene/moantain_road.unity
+    path: Assets/Scenes/SampleScene/Stage2.unity
+    guid: 1d537ae314c66ee49984bfe0f1f3f993
+  - enabled: 1
+    path: Assets/Scenes/SampleScene/Stage1.unity
     guid: 71db96a40aa6aa44cbb3e6817878a457
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}
