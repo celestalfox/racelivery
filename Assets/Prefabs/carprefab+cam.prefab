@@ -1722,7 +1722,7 @@ MonoBehaviour:
   score: 0
   multiplier: 1
   driftSteerThreshold: 30
-  scorePerSecond: 100
+  scorePerSecond: 1000
   multiplierRamp: 5
   maxMultiplier: 40
   driftGraceTime: 0.35
