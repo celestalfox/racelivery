@@ -1721,10 +1721,10 @@ MonoBehaviour:
   stabilityStrength: 2.5
   score: 0
   multiplier: 1
-  driftSteerThreshold: 20
-  scorePerSecond: 10
-  multiplierRamp: 1
-  maxMultiplier: 20
+  driftSteerThreshold: 30
+  scorePerSecond: 100
+  multiplierRamp: 5
+  maxMultiplier: 40
   driftGraceTime: 0.35
   wheels:
   - wheelModel: {fileID: 5141474858935974920}

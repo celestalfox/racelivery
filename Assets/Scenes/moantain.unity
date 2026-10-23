@@ -2136,6 +2136,10 @@ PrefabInstance:
       propertyPath: m_Name
       value: carprefab+cam
       objectReference: {fileID: 0}
+    - target: {fileID: 3260815326736027582, guid: b4fd8824bdd36814e8785a5b5492bf96, type: 3}
+      propertyPath: driftSteerThreshold
+      value: 20
+      objectReference: {fileID: 0}
     - target: {fileID: 8103777129349752992, guid: b4fd8824bdd36814e8785a5b5492bf96, type: 3}
       propertyPath: m_LocalPosition.x
       value: 0
