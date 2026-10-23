@@ -1,4 +1,6 @@
 using System.Collections.Generic;
+using CarContollingScripts;
+using TMPro;
 using UnityEngine;
 using UnityEngine.Events;
 using UnityEngine.EventSystems;
@@ -26,6 +28,10 @@ public static class GameFlow
     public const string InGameUI = "INGAME_UI";
 
     public static readonly string[] Stages = { "f1", "moantain" };
+    public static readonly string[] StageNames = { "F1", "moantain" };   // shown in the Vehicle Menu
+    const string StageLabelObject = "Text (TMP)";                        // the text that shows the stage name
+    public static bool UseTimer = true;                                  // attach the countdown to the TIME text
+    public static readonly float[] StageTimeSeconds = { 120f, 120f };    // time limit per stage (same order as Stages)
     public const int CarCount = 2;            // how many cars LEFT/RIGHT cycles through
 
     // Show the new INGAME_UI (pause button) on top of stages and hide the old in-stage pause UI
@@ -35,6 +41,11 @@ public static class GameFlow
     public static int SelectedStage { get; private set; }
 
     static string lastStage = Stages[0];
+    static bool timeUpScreen;   // true when DEATH is opened because time ran out
+
+    /// <summary>Score of the run that just ended (set when the death screen opens).</summary>
+    public static int LastScore { get; private set; }
+    public static int BestScore => PlayerPrefs.GetInt("bestScore_" + lastStage, 0);
 
     // ------------------------------------------------------------------ boot
 
@@ -42,6 +53,7 @@ public static class GameFlow
     static void Boot()
     {
         SelectedCar = PlayerPrefs.GetInt("selectedCar", 0);
+        SelectedStage = Mathf.Clamp(PlayerPrefs.GetInt("selectedStage", 0), 0, Stages.Length - 1);
         ApplyVolume();
         SceneManager.sceneLoaded -= OnSceneLoaded;
         SceneManager.sceneLoaded += OnSceneLoaded;
@@ -56,12 +68,14 @@ public static class GameFlow
         {
             Time.timeScale = 1f;
             AudioListener.pause = false;
+            timeUpScreen = false;
         }
         else
         {
             PrepareAdditive(scene);
         }
 
+        DisableTextRaycasts(scene);
         WireScene(scene, additive);
 
         if (!additive && System.Array.IndexOf(Stages, scene.name) >= 0)
@@ -92,12 +106,11 @@ public static class GameFlow
                 break;
 
             case VehicleMenu:
-                Wire(scene, "BACK", () => Go(MainMenu));
-                Wire(scene, "NEXT", () => Go(Stages[SelectedStage]));
-                Wire(scene, "LEFT", () => ChangeCar(-1));
-                Wire(scene, "RIGHT", () => ChangeCar(+1));
-                Wire(scene, "UP", () => ChangeStage(-1));
-                Wire(scene, "DOWN", () => ChangeStage(+1));
+                Wire(scene, "back|BACK", () => Go(MainMenu));
+                Wire(scene, "next/play|NEXT", () => Go(Stages[SelectedStage]));
+                Wire(scene, "select car/track UP", () => ChangeStage(-1));
+                Wire(scene, "select car/track down", () => ChangeStage(+1));
+                RefreshVehicleMenu();
                 break;
 
             case Shop:
@@ -114,6 +127,8 @@ public static class GameFlow
 
             case InGameUI:
                 Wire(scene, "Button", OpenPause);                    // pause icon
+                AttachScoreDisplay(scene);
+                if (UseTimer) AttachTimer(scene);
                 break;
 
             case Pause:
@@ -127,6 +142,7 @@ public static class GameFlow
                 Wire(scene, "RESTART", Retry);
                 Wire(scene, "RETRY", Retry);
                 Wire(scene, "AD_Button", () => Debug.Log("[GameFlow] Revive-by-ad pressed: hook your ad SDK here"));
+                ShowScoreOnDeath(scene);
                 break;
         }
     }
@@ -154,21 +170,30 @@ public static class GameFlow
         }
     }
 
-    static void Wire(Scene scene, string objectName, UnityAction action)
+    /// <summary>objectNames can list alternatives separated by '|': the first one found is used.</summary>
+    static void Wire(Scene scene, string objectNames, UnityAction action)
     {
-        Transform t = FindIn(scene, objectName);
+        Transform t = null;
+        foreach (string n in objectNames.Split('|'))
+        {
+            t = FindIn(scene, n);
+            if (t != null) break;
+        }
         if (t == null)
         {
-            Debug.LogWarning($"[GameFlow] '{objectName}' not found in scene '{scene.name}'");
+            Debug.LogWarning($"[GameFlow] '{objectNames}' not found in scene '{scene.name}'");
             return;
         }
 
-        // Some objects (e.g. BACK / NEXT) may not be real buttons yet: make them clickable.
-        if (t.GetComponent<Graphic>() == null)
+        // Make sure the object can actually receive clicks.
+        Graphic g = t.GetComponent<Graphic>();
+        if (g == null)
         {
-            var img = t.gameObject.AddComponent<Image>();
-            img.color = Color.clear;
+            g = t.gameObject.AddComponent<Image>();
+            ((Image)g).color = Color.clear;
         }
+        g.raycastTarget = true;
+
         Button b = t.GetComponent<Button>();
         if (b == null) b = t.gameObject.AddComponent<Button>();
 
@@ -202,8 +227,20 @@ public static class GameFlow
     }
 
     /// <summary>Call this from game code when the player loses.</summary>
-    public static void ShowDeath()
+    public static void ShowDeath() => ShowEndScreen(false);
+
+    /// <summary>Called by the timer when it reaches zero: same screen, but with the final score.</summary>
+    public static void ShowTimeUp() => ShowEndScreen(true);
+
+    static void ShowEndScreen(bool timeUp)
     {
+        if (SceneManager.GetSceneByName(Death).isLoaded) return;   // already showing
+        timeUpScreen = timeUp;
+
+        CarController car = Object.FindFirstObjectByType<CarController>();
+        LastScore = car != null ? Mathf.FloorToInt(car.score) : 0;
+        if (LastScore > BestScore) PlayerPrefs.SetInt("bestScore_" + lastStage, LastScore);
+
         LoadAdditive(Death);
         Time.timeScale = 0f;
     }
@@ -227,8 +264,9 @@ public static class GameFlow
     static void ChangeStage(int d)
     {
         SelectedStage = (SelectedStage + d + Stages.Length) % Stages.Length;
+        PlayerPrefs.SetInt("selectedStage", SelectedStage);
         Debug.Log($"[GameFlow] Selected stage: {Stages[SelectedStage]}");
-        SceneManager.LoadScene(SelectedStage);
+        RefreshVehicleMenu();
     }
 
     static void ToggleMute()
@@ -291,6 +329,127 @@ public static class GameFlow
                 foreach (var es in root.GetComponentsInChildren<EventSystem>(true))
                     es.gameObject.SetActive(false);
         }
+    }
+
+    /// <summary>Find the "SCORE :" label in INGAME_UI and give the number next to it a ScoreDisplay.</summary>
+    static void AttachScoreDisplay(Scene scene)
+    {
+        foreach (var root in scene.GetRootGameObjects())
+        {
+            foreach (var label in root.GetComponentsInChildren<TMP_Text>(true))
+            {
+                if (label.text.Replace(":", "").Trim().ToUpperInvariant() != "SCORE") continue;
+
+                Transform parent = label.transform.parent;
+                for (int i = 0; parent != null && i < parent.childCount; i++)
+                {
+                    Transform sibling = parent.GetChild(i);
+                    if (sibling == label.transform) continue;
+                    TMP_Text value = sibling.GetComponent<TMP_Text>();
+                    if (value == null) continue;
+
+                    if (value.GetComponent<ScoreDisplay>() == null)
+                        value.gameObject.AddComponent<ScoreDisplay>().uiText = value;
+                    return;
+                }
+            }
+        }
+        Debug.LogWarning("[GameFlow] Could not find the 'SCORE :' label in INGAME_UI");
+    }
+
+    /// <summary>
+    /// The DEATH scene has no score text: copy the "YOU LOST" text and put it underneath.
+    /// When time ran out, the heading becomes "FINAL SCORE" and the number is shown big.
+    /// </summary>
+    static void ShowScoreOnDeath(Scene scene)
+    {
+        Transform lose = FindIn(scene, "LOSE");
+        if (lose == null) { Debug.LogWarning("[GameFlow] 'LOSE' text not found in DEATH"); return; }
+
+        TMP_Text loseText = lose.GetComponent<TMP_Text>();
+        if (timeUpScreen && loseText != null) loseText.text = "FINAL SCORE";
+
+        GameObject clone = Object.Instantiate(lose.gameObject, lose.parent);
+        clone.name = "SCORE_TEXT";
+
+        RectTransform src = (RectTransform)lose;
+        RectTransform rt = (RectTransform)clone.transform;
+        rt.anchoredPosition = src.anchoredPosition + new Vector2(0f, timeUpScreen ? -170f : -250f);
+        rt.sizeDelta = new Vector2(src.sizeDelta.x, 200f);
+
+        TMP_Text txt = clone.GetComponent<TMP_Text>();
+        txt.raycastTarget = false;
+        int best = Mathf.Max(BestScore, LastScore);
+
+        if (timeUpScreen)
+        {
+            txt.fontSize = 110f;
+            txt.text = $"{LastScore}\n<size=50>BEST  {best}</size>";
+        }
+        else
+        {
+            txt.fontSize = 60f;
+            txt.text = $"SCORE  {LastScore}\nBEST  {best}";
+        }
+    }
+
+    /// <summary>Find the "TIME :" label in INGAME_UI and put a countdown on the number next to it.</summary>
+    static void AttachTimer(Scene scene)
+    {
+        foreach (var root in scene.GetRootGameObjects())
+            if (root.GetComponentInChildren<TimeSet>(true) != null) return;   // you placed one yourself
+
+        foreach (var root in scene.GetRootGameObjects())
+        {
+            foreach (var label in root.GetComponentsInChildren<TMP_Text>(true))
+            {
+                if (label.text.Replace(":", "").Trim().ToUpperInvariant() != "TIME") continue;
+
+                Transform parent = label.transform.parent;
+                for (int i = 0; parent != null && i < parent.childCount; i++)
+                {
+                    Transform sibling = parent.GetChild(i);
+                    if (sibling == label.transform || sibling.GetComponent<TMP_Text>() == null) continue;
+
+                    TimeSet timer = sibling.gameObject.AddComponent<TimeSet>();
+                    int idx = System.Array.IndexOf(Stages, lastStage);
+                    if (idx >= 0 && idx < StageTimeSeconds.Length) timer.duration = StageTimeSeconds[idx];
+                    return;
+                }
+            }
+        }
+        Debug.LogWarning("[GameFlow] Could not find the 'TIME :' label in INGAME_UI");
+    }
+
+    /// <summary>Update the "1 / 2" counter and the stage name in the Vehicle Menu.</summary>
+    static void RefreshVehicleMenu()
+    {
+        Scene s = SceneManager.GetSceneByName(VehicleMenu);
+        if (!s.isLoaded) return;
+        Transform t = FindIn(s, "Text (TMP) (1)");
+        if (t != null)
+        {
+            TMP_Text counter = t.GetComponent<TMP_Text>();
+            if (counter != null) counter.SetText("{0} / {1}"+ SelectedStage + 1, Stages.Length);
+        }
+
+        Transform label = FindIn(s, StageLabelObject);
+        if (label != null)
+        {
+            TMP_Text name = label.GetComponent<TMP_Text>();
+            if (name != null) name.text = StageNames[SelectedStage];
+        }
+    }
+
+    /// <summary>
+    /// Text sitting on top of a button (BACK, NEXT...) swallows the click. Text never needs
+    /// to be clickable, so turn raycasts off on all of it. Wire() re-enables it on real targets.
+    /// </summary>
+    static void DisableTextRaycasts(Scene scene)
+    {
+        foreach (var root in scene.GetRootGameObjects())
+            foreach (var txt in root.GetComponentsInChildren<TMP_Text>(true))
+                txt.raycastTarget = false;
     }
 
     static void HideOldPauseUI(Scene scene)

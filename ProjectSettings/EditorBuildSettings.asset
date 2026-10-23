@@ -6,31 +6,31 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
-    path: Assets/UI_Game/Scenes/Main_menu.unity
+    path: Assets/Scenes/Main_menu.unity
     guid: 22cd96a524d909f43b880685c2e8f789
   - enabled: 1
-    path: Assets/UI_Game/Scenes/Vehicle Menu.unity
+    path: Assets/Scenes/Vehicle Menu.unity
     guid: 5b08ec096fe6eec44b5b0969048a61d1
   - enabled: 1
-    path: Assets/UI_Game/Scenes/SHOP.unity
+    path: Assets/Scenes/SHOP.unity
     guid: 9c3b85b6925ab39478bcb59f2b2acd30
   - enabled: 1
-    path: Assets/UI_Game/Scenes/Settings_menu.unity
+    path: Assets/Scenes/Settings_menu.unity
     guid: 4b216cf96e3c7bc4cb74b2800af14db2
   - enabled: 1
-    path: Assets/UI_Game/Scenes/f1.unity
+    path: Assets/Scenes/f1.unity
     guid: 1d537ae314c66ee49984bfe0f1f3f993
   - enabled: 1
-    path: Assets/UI_Game/Scenes/moantain.unity
+    path: Assets/Scenes/moantain.unity
     guid: 71db96a40aa6aa44cbb3e6817878a457
   - enabled: 1
-    path: Assets/UI_Game/Scenes/INGAME_UI.unity
+    path: Assets/Scenes/INGAME_UI.unity
     guid: 38f11eedc0494f243a5024528f3531cc
   - enabled: 1
-    path: Assets/UI_Game/Scenes/Pause_menu.unity
+    path: Assets/Scenes/Pause_menu.unity
     guid: a08462f4b9ed1c148819433584faf8b1
   - enabled: 1
-    path: Assets/UI_Game/Scenes/DEATH.unity
+    path: Assets/Scenes/DEATH.unity
     guid: a2b663879909d294fab5d41ad0d22d30
   m_configObjects:
     com.unity.input.settings.actions: {fileID: -944628639613478452, guid: 052faaac586de48259a63d0c4782560b, type: 3}

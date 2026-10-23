@@ -155,7 +155,6 @@ namespace CarContollingScripts
             Brake();
             ApplyStability();
             UpdateDriftGrip();
-            print(score);
             UpdateScore(Time.fixedDeltaTime);
         }
 

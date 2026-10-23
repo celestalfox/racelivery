@@ -207,7 +207,7 @@ GameObject:
   - component: {fileID: 67557013}
   - component: {fileID: 67557012}
   m_Layer: 5
-  m_Name: LEFT
+  m_Name: back
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -842,7 +842,7 @@ GameObject:
   - component: {fileID: 752724565}
   - component: {fileID: 752724564}
   m_Layer: 5
-  m_Name: DOWN
+  m_Name: select car/track down
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -962,7 +962,7 @@ GameObject:
   - component: {fileID: 765606145}
   - component: {fileID: 765606144}
   m_Layer: 5
-  m_Name: UP
+  m_Name: select car/track UP
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0
@@ -1434,7 +1434,7 @@ GameObject:
   - component: {fileID: 1481963691}
   - component: {fileID: 1481963690}
   m_Layer: 5
-  m_Name: RIGHT
+  m_Name: next/play
   m_TagString: Untagged
   m_Icon: {fileID: 0}
   m_NavMeshLayer: 0

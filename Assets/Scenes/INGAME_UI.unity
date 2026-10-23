@@ -130,6 +130,7 @@ GameObject:
   - component: {fileID: 61856709}
   - component: {fileID: 61856711}
   - component: {fileID: 61856710}
+  - component: {fileID: 61856712}
   m_Layer: 5
   m_Name: Info1 (1)
   m_TagString: Untagged
@@ -256,6 +257,20 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 61856708}
   m_CullTransparentMesh: 1
+--- !u!114 &61856712
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 61856708}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0e33c4bd8914ea849b408678a94d5b86, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::ScoreDisplay
+  uiText: {fileID: 61856710}
+  digits: 0
 --- !u!1 &224623574
 GameObject:
   m_ObjectHideFlags: 0
@@ -731,6 +746,7 @@ GameObject:
   - component: {fileID: 1747115652}
   - component: {fileID: 1747115654}
   - component: {fileID: 1747115653}
+  - component: {fileID: 1747115655}
   m_Layer: 5
   m_Name: Info1 (1)
   m_TagString: Untagged
@@ -857,6 +873,27 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1747115651}
   m_CullTransparentMesh: 1
+--- !u!114 &1747115655
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1747115651}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: ea7fa43a577691541aaac3de8bc79c43, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Assembly-CSharp::TimeSet
+  duration: 120
+  startOnStart: 1
+  showHundredths: 1
+  warnAtSeconds: 10
+  warnColor: {r: 1, g: 0.25, b: 0.25, a: 1}
+  endsGame: 1
+  onTimeUp:
+    m_PersistentCalls:
+      m_Calls: []
 --- !u!1 &1873911374
 GameObject:
   m_ObjectHideFlags: 0
